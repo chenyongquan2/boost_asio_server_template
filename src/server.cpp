@@ -31,6 +31,8 @@ void Session::do_read()
     socket_.async_read_some(buf,[this,self](std::error_code ec,std::size_t length){
         if(ec)
         {
+            //当客户端断开连接时，服务器能够检测到并相应地更新会话状态
+            //在 do_read 和 do_write 中，如果遇到错误（可能是连接断开），会调用 handle_disconnect
             SPDLOG_ERROR("read error: {} ({})", ec.message(), ec.value());
             handle_error(ec);
             return;
@@ -57,6 +59,8 @@ void Session::do_write(const std::string& data)
     asio::async_write(socket_,asio::buffer(data),[this,self,data](std::error_code ec,std::size_t length){
         if(ec)
         {
+            //当客户端断开连接时，服务器能够检测到并相应地更新会话状态
+            //在 do_read 和 do_write 中，如果遇到错误（可能是连接断开），会调用 handle_disconnect
             SPDLOG_ERROR("write error: {} ({})", ec.message(), ec.value());
             handle_error(ec);
             return;
@@ -75,6 +79,19 @@ void Session::process_data(const std::string& data)
     do_write(data);
 }
 
+bool Session::is_connected() const 
+{
+    return socket_.is_open();
+}
+
+void Session::handle_disconnect() 
+{
+    // 关闭socket,以此释放资源
+    socket_.close();
+    //Todo: 这里可以添加一些清理工作，但保留会话状态以便重连
+    SPDLOG_INFO("Session:{} Close socket", session_id_);
+}
+
 void Session::handle_error(const std::error_code& ec) 
 {
     if(ec == asio::error::eof || ec == asio::error::connection_reset)
@@ -85,11 +102,8 @@ void Session::handle_error(const std::error_code& ec)
     {
         SPDLOG_ERROR("error: {} ({})", ec.message(), ec.value());
     }
-
-    // 关闭socket
-    asio::error_code ignored_ec;
-    socket_.close(ignored_ec);
-    SPDLOG_INFO("Session:{} Error occured, Close socket", session_id_);
+   
+    handle_disconnect();
 }
 
 Server::Server(asio::io_context& io_context, short port)
@@ -115,8 +129,15 @@ void Server::do_accept()
             auto strSessionId = std::to_string(sessionId);
             
             auto newSession = find_or_create_session(strSessionId);
+            if(newSession->is_connected())
+            {
+                //当客户端重新连接时，服务器可以找到现有的会话，断开旧的连接（如果还存在），并使用新的 socket 重新启动会话
+                SPDLOG_INFO( "Session:{} is reconnecting", strSessionId);
+                newSession->handle_disconnect();//断开旧连接
+            }
+
             //Todo:这里必须得调用std::move(socket),因为socket是不支持拷贝构造的，只能移动构造
-            newSession->start(std::move(socket));
+            newSession->start(std::move(socket));//启动新连接
 
             //技巧，链式调用
             do_accept();

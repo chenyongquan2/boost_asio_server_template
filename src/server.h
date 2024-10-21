@@ -18,6 +18,9 @@ public:
         return session_id_;
     }
 
+    bool is_connected() const;
+    void handle_disconnect();
+
 private:
     void do_read();
     void do_write(const std::string& data);
