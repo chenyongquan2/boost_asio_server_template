@@ -26,7 +26,7 @@ void Session::do_read()
     auto self(shared_from_this());
     auto buf = asio::buffer(data_,max_length);
     //Todo:这里捕获this是为了在lambda内部方便使用this里的成员变量
-    //Todo:技巧 这里捕获智能指针，是为了延长生命周期
+    //Todo:技巧 使用 shared_from_this() 来确保 Session 对象在异步操作完成之前不会被销毁
 
     socket_.async_read_some(buf,[this,self](std::error_code ec,std::size_t length){
         if(ec)
@@ -37,20 +37,24 @@ void Session::do_read()
         }
         else
         {
-            SPDLOG_INFO("Received {} bytes", length);
-            // 可以在这里打印接收到的数据
             std::string received_data(data_,length);
-            SPDLOG_INFO("Received data: {}", received_data);
-            do_write(length);
+            SPDLOG_INFO("Received data: {},bytes:{}", received_data, length);
+            process_data(received_data);
         }
     });
 }
 
-void Session::do_write(std::size_t length)
+void Session::do_write(const std::string& data)
 {
     auto self(shared_from_this());
-    auto buf = asio::buffer(data_,length);
-    asio::async_write(socket_,buf,[this,self](std::error_code ec,std::size_t length){
+    //在异步写操作注意发送数据的生命周期，确保 data 在异步操作(因为可能会多次底层写操作，尤其当data很大的情况下)完成之前不会被销毁
+    //方法1: session的成员变量保持要发送的数据,适合数据量大，分段发送，错误重试等情况
+    //outbound_data_ = std::move(data);
+    //auto buf = asio::buffer(outbound_data_.data(),outbound_data_.size());
+    //auto buf = asio::buffer(outbound_data_);
+
+    //方法2: 使用lambda值捕获data(lambda里面有每个data的副本)，适合数据量小，一次性发送的情况
+    asio::async_write(socket_,asio::buffer(data),[this,self,data](std::error_code ec,std::size_t length){
         if(ec)
         {
             SPDLOG_ERROR("write error: {} ({})", ec.message(), ec.value());
@@ -64,6 +68,11 @@ void Session::do_write(std::size_t length)
         }
 
     });
+}
+
+void Session::process_data(const std::string& data)
+{
+    do_write(data);
 }
 
 void Session::handle_error(const std::error_code& ec) 
