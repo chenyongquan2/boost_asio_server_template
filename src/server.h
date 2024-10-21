@@ -27,7 +27,7 @@ private:
     asio::ip::tcp::socket socket_;
     char data_[max_length];
 
-    std::string session_id_;
+    std::string session_id_;//唯一标识会话
     asio::io_context& io_context_;
 };
 
@@ -40,10 +40,12 @@ public:
 private:
     void do_accept();
 
-    std::shared_ptr<Session> find_or_create_session(const std::string& session_id);
+    //用于服务端支持客户端重连
+    std::shared_ptr<Session> find_or_create_session(const std::string& session_id);//用于处理新连接或重连。
 
 private:
     asio::io_context& io_context_;
     asio::ip::tcp::acceptor acceptor_;
+
     std::unordered_map<std::string,std::shared_ptr<Session>> sessions_;
 };

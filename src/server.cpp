@@ -80,7 +80,7 @@ void Session::handle_error(const std::error_code& ec)
     // 关闭socket
     asio::error_code ignored_ec;
     socket_.close(ignored_ec);
-    SPDLOG_INFO("Error occured, Close socket");
+    SPDLOG_INFO("Session:{} Error occured, Close socket", session_id_);
 }
 
 Server::Server(asio::io_context& io_context, short port)
@@ -101,6 +101,7 @@ void Server::do_accept()
         }
         else
         {
+            //Todo:实现一个机制来从客户端的初始消息中提取或生成 session_id
             sessionId++;
             auto strSessionId = std::to_string(sessionId);
             
@@ -119,8 +120,9 @@ std::shared_ptr<Session> Server::find_or_create_session(const std::string& sessi
     auto it = sessions_.find(session_id);
     if(it != sessions_.end())
     {
-        // 找到现有会话，可能需要更新一些状态
+        // 用于实现"服务端支持客户端重连";
         SPDLOG_INFO("Reconnected session: {}",session_id);
+        //Todo:找到现有会话，可能需要更新一些状态
         return it->second;
     }
     else
