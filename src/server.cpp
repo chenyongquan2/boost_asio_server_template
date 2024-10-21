@@ -1,5 +1,6 @@
 #include "server.h"
 #include "asio/buffer.hpp"
+#include "asio/error.hpp"
 #include "asio/write.hpp"
 #include "spdlog/spdlog.h"
 #include <system_error>
@@ -31,10 +32,8 @@ void Session::do_read()
         if(ec)
         {
             SPDLOG_ERROR("read error: {} ({})", ec.message(), ec.value());
-            if (ec == asio::error::eof)
-            {
-                SPDLOG_INFO("Client closed the connection");
-            }
+            handle_error(ec);
+            return;
         }
         else
         {
@@ -55,10 +54,8 @@ void Session::do_write(std::size_t length)
         if(ec)
         {
             SPDLOG_ERROR("write error: {} ({})", ec.message(), ec.value());
-            if (ec == asio::error::eof)
-            {
-                SPDLOG_INFO("Client closed the connection");
-            }
+            handle_error(ec);
+            return;
         }
         else
         {
@@ -67,6 +64,23 @@ void Session::do_write(std::size_t length)
         }
 
     });
+}
+
+void Session::handle_error(const std::error_code& ec) 
+{
+    if(ec == asio::error::eof || ec == asio::error::connection_reset)
+    {
+        SPDLOG_INFO("Client closed the connection, error: {}", ec.message());
+    } 
+    else 
+    {
+        SPDLOG_ERROR("error: {} ({})", ec.message(), ec.value());
+    }
+
+    // 关闭socket
+    asio::error_code ignored_ec;
+    socket_.close(ignored_ec);
+    SPDLOG_INFO("Error occured, Close socket");
 }
 
 Server::Server(asio::io_context& io_context, short port)

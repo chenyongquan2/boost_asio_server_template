@@ -21,6 +21,7 @@ public:
 private:
     void do_read();
     void do_write(std::size_t length);
+    void handle_error(const std::error_code& ec);
 
 private:
     asio::ip::tcp::socket socket_;
