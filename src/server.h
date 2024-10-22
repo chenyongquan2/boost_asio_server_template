@@ -1,6 +1,7 @@
 #pragma once
 
 #include "asio/io_context.hpp"
+#include "asio/steady_timer.hpp"
 #include <asio.hpp>
 #include <memory>
 #include <unordered_map>
@@ -27,8 +28,12 @@ private:
     void process_data(const std::string& data);
     void handle_error(const std::error_code& ec);
 
+    void start_inactivity_timer();
+    
 private:
     asio::ip::tcp::socket socket_;
+    asio::steady_timer inactivity_timer_;//不活动计时器功能
+
     char data_[max_length];
     //std::string outbound_data_;//输出缓冲区
 
